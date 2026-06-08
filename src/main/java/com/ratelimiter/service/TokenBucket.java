@@ -1,41 +1,47 @@
 package com.ratelimiter.service;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 public class TokenBucket {
     private final long capacity;
     private final double tokensPerNanosecond;
+    private static final long SCALE = 1000L;
 
-    private double tokens;
-    private long lastRefillTimeNanos;
+    private final AtomicLong tokens;
+    private final AtomicLong lastRefillTimeNanos;
 
     public TokenBucket(long capacity, double refillRatePerSecond) {
         this.capacity = capacity;
         this.tokensPerNanosecond = refillRatePerSecond / 1_000_000_000.0;
-        this.tokens = capacity;
-        this.lastRefillTimeNanos = System.nanoTime();
+        this.tokens = new AtomicLong(capacity * SCALE);
+        this.lastRefillTimeNanos = new AtomicLong(System.nanoTime());
     }
 
     public boolean allowRequest() {
-        refill();
-        if (this.tokens >= 1.0) {
-            tokens -= 1.0;
-            return true;
+        while (true) {
+            long currentTokens = tokens.get();
+            long lastRefill = lastRefillTimeNanos.get();
+
+            long now = System.nanoTime();
+            long elapsed = now - lastRefill;
+
+            long tokensToAdd = (long) (elapsed * tokensPerNanosecond * SCALE);
+            long newTokens = Math.min(capacity * SCALE, currentTokens + tokensToAdd);
+
+            if (newTokens < SCALE) {
+                return false;
+            }
+
+            // ✅ Fix: CAS on time first — only ONE thread wins the refill
+            if (lastRefillTimeNanos.compareAndSet(lastRefill, now)) {
+                tokens.set(newTokens - SCALE);
+                return true;
+            }
+            // another thread already refilled → retry whole loop
         }
-        return false;
     }
 
-
-    private void refill() {
-        long now = System.nanoTime();
-        long elapsedNanos = now - this.lastRefillTimeNanos;
-
-        if (elapsedNanos <= 0) return;
-
-        double tokensToAdd = elapsedNanos * this.tokensPerNanosecond;
-        this.tokens = Math.min(this.capacity, this.tokens + tokensToAdd);
-        this.lastRefillTimeNanos = now;
-    }
-
-    public double getTokens() {
-        return this.tokens;
+    public long getTokensAtomicValue() {
+        return tokens.get();
     }
 }
