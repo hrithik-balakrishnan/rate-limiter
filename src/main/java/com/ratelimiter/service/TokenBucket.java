@@ -44,4 +44,8 @@ public class TokenBucket {
     public long getTokensAtomicValue() {
         return tokens.get();
     }
+    // The registry needs to know exactly when a bucket was last used
+    public long getLastRefillTimeNanos() {
+        return lastRefillTimeNanos.get();
+    }
 }
