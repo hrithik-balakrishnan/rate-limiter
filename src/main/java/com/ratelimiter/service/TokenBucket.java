@@ -4,48 +4,54 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class TokenBucket {
     private final long capacity;
-    private final double tokensPerNanosecond;
-    private static final long SCALE = 1000L;
+    private final long refillRatePerSecond;
+    private final AtomicLong state;
 
-    private final AtomicLong tokens;
-    private final AtomicLong lastRefillTimeNanos;
-
-    public TokenBucket(long capacity, double refillRatePerSecond) {
+    public TokenBucket(long capacity, long refillRatePerSecond) {
         this.capacity = capacity;
-        this.tokensPerNanosecond = refillRatePerSecond / 1_000_000_000.0;
-        this.tokens = new AtomicLong(capacity * SCALE);
-        this.lastRefillTimeNanos = new AtomicLong(System.nanoTime());
+        this.refillRatePerSecond = refillRatePerSecond;
+        long currentTimeSec = System.currentTimeMillis() / 1000;
+        this.state = new AtomicLong(pack(capacity, currentTimeSec));
     }
 
-    public boolean allowRequest() {
+    // ADD THIS METHOD OUT LOUD IF IT IS MISSING:
+    public boolean tryConsume() {
         while (true) {
-            long currentTokens = tokens.get();
-            long lastRefill = lastRefillTimeNanos.get();
+            long currentState = state.get();
+            long currentTokens = getTokens(currentState);
+            long lastRefillTime = getTimestamp(currentState);
+            long currentTimeSec = System.currentTimeMillis() / 1000;
 
-            long now = System.nanoTime();
-            long elapsed = now - lastRefill;
+            // Calculate accumulated tokens lazily
+            long elapsedSeconds = Math.max(0, currentTimeSec - lastRefillTime);
+            long newTokens = currentTokens + (elapsedSeconds * refillRatePerSecond);
+            newTokens = Math.min(capacity, newTokens);
 
-            long tokensToAdd = (long) (elapsed * tokensPerNanosecond * SCALE);
-            long newTokens = Math.min(capacity * SCALE, currentTokens + tokensToAdd);
-
-            if (newTokens < SCALE) {
+            // If no tokens available, deny request
+            if (newTokens < 1) {
                 return false;
             }
 
-            // ✅ Fix: CAS on time first — only ONE thread wins the refill
-            if (lastRefillTimeNanos.compareAndSet(lastRefill, now)) {
-                tokens.set(newTokens - SCALE);
+            // Prepare next packed state (decrement 1 token, update timestamp)
+            long nextState = pack(newTokens - 1, currentTimeSec);
+
+            // Atomic CAS update execution
+            if (state.compareAndSet(currentState, nextState)) {
                 return true;
             }
-            // another thread already refilled → retry whole loop
         }
     }
 
-    public long getTokensAtomicValue() {
-        return tokens.get();
+    // Bit-packing helper utilities
+    private long pack(long tokens, long timestamp) {
+        return (tokens << 32) | (timestamp & 0xFFFFFFFFL);
     }
-    // The registry needs to know exactly when a bucket was last used
-    public long getLastRefillTimeNanos() {
-        return lastRefillTimeNanos.get();
+
+    private long getTokens(long packed) {
+        return packed >>> 32;
+    }
+
+    private long getTimestamp(long packed) {
+        return packed & 0xFFFFFFFFL;
     }
 }
