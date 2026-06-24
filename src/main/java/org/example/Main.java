@@ -2,9 +2,10 @@ package org.example;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
-// Tell Spring Boot exactly where to find your controllers and services
-@SpringBootApplication(scanBasePackages = {"org.example", "com.ratelimiter"})
+@SpringBootApplication
+@EnableAsync // <--- ADD THIS
 public class Main {
     public static void main(String[] args) {
         SpringApplication.run(Main.class, args);

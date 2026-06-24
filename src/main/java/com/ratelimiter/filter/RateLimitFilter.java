@@ -1,12 +1,15 @@
 package com.ratelimiter.filter;
 
+import com.ratelimiter.event.RateLimitExceededEvent;
 import com.ratelimiter.service.TenantRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 
 import java.io.IOException;
 
@@ -14,10 +17,12 @@ import java.io.IOException;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final TenantRegistry tenantRegistry;
+    private final ApplicationEventPublisher eventPublisher;
 
-    // Spring Boot automatically injects your Phase 1 Singleton Engine right here
-    public RateLimitFilter(TenantRegistry tenantRegistry) {
+    // Spring Boot automatically injects both the Tenant Registry engine and the Core Event Bus
+    public RateLimitFilter(TenantRegistry tenantRegistry, ApplicationEventPublisher eventPublisher) {
         this.tenantRegistry = tenantRegistry;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -37,6 +42,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // Token successfully consumed! Pass request downstream to the controller layer.
             filterChain.doFilter(request, response);
         } else {
+            // 4. Extract Context & Fire Event (Non-blocking handoff to background worker)
+            String ipAddress = request.getRemoteAddr();
+            eventPublisher.publishEvent(new RateLimitExceededEvent(tenantId, ipAddress));
+
             // Short-circuit: The user is out of tokens. Fail fast at the perimeter.
             response.setStatus(429); // HTTP 429: Too Many Requests
             response.setContentType("application/json");
