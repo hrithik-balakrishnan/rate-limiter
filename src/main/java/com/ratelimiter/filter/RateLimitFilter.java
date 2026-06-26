@@ -10,7 +10,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-
 import java.io.IOException;
 
 @Component
@@ -19,7 +18,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final TenantRegistry tenantRegistry;
     private final ApplicationEventPublisher eventPublisher;
 
-    // Spring Boot automatically injects both the Tenant Registry engine and the Core Event Bus
     public RateLimitFilter(TenantRegistry tenantRegistry, ApplicationEventPublisher eventPublisher) {
         this.tenantRegistry = tenantRegistry;
         this.eventPublisher = eventPublisher;
@@ -29,27 +27,34 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Edge Extraction: Grab the identifier header from the network stream
+        // 1. Primary Extraction
         String tenantId = request.getHeader("X-API-KEY");
 
-        // 2. Local Fallback: Allow easy local verification from web browsers
+        // 2. Secondary Extraction: Proxy Chain Traversal
         if (tenantId == null || tenantId.isEmpty()) {
-            tenantId = "anonymous-user";
+            tenantId = extractRealIp(request);
         }
 
-        // 3. The Hot Path Interrogation: Check the lock-free CAS engine
+        // 3. Hot Path
         if (tenantRegistry.allowRequest(tenantId)) {
-            // Token successfully consumed! Pass request downstream to the controller layer.
             filterChain.doFilter(request, response);
         } else {
-            // 4. Extract Context & Fire Event (Non-blocking handoff to background worker)
-            String ipAddress = request.getRemoteAddr();
-            eventPublisher.publishEvent(new RateLimitExceededEvent(tenantId, ipAddress));
+            // 4. Fire Async Event using the exact identifier that was blocked
+            eventPublisher.publishEvent(new RateLimitExceededEvent(tenantId, extractRealIp(request)));
 
-            // Short-circuit: The user is out of tokens. Fail fast at the perimeter.
-            response.setStatus(429); // HTTP 429: Too Many Requests
+            response.setStatus(429);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Too Many Requests\", \"message\": \"API rate limit exceeded. Please try again later.\"}");
+            response.getWriter().write("{\"error\": \"Too Many Requests\", \"message\": \"API rate limit exceeded.\"}");
         }
+    }
+
+    // UTILITY: Safely extract IP through load balancers
+    private String extractRealIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            // The first IP in the comma-separated list is the original client
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

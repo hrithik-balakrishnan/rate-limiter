@@ -1,0 +1,29 @@
+package com.ratelimiter.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
+
+@Configuration
+@EnableAsync
+public class AsyncConfig implements AsyncConfigurer {
+
+    @Override
+    public Executor getAsyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10); // Base number of threads
+        executor.setMaxPoolSize(50);  // Max threads during a spike
+        executor.setQueueCapacity(10000); // Maximum events waiting in line
+        executor.setThreadNamePrefix("AuditLogWorker-");
+
+        // IF the queue hits 10,000, drop the newest logs to save the server
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+
+        executor.initialize();
+        return executor;
+    }
+}
