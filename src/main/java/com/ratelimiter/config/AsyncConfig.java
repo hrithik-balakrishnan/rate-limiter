@@ -15,14 +15,11 @@ public class AsyncConfig implements AsyncConfigurer {
     @Override
     public Executor getAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10); // Base number of threads
-        executor.setMaxPoolSize(50);  // Max threads during a spike
-        executor.setQueueCapacity(10000); // Maximum events waiting in line
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(50);
+        executor.setQueueCapacity(10000);
         executor.setThreadNamePrefix("AuditLogWorker-");
-
-        // IF the queue hits 10,000, drop the newest logs to save the server
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
-
         executor.initialize();
         return executor;
     }

@@ -1,5 +1,7 @@
 package com.ratelimiter.event;
 
+import com.ratelimiter.model.AuditLogRecord;
+import com.ratelimiter.repository.AuditLogRepository;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -7,10 +9,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuditLogListener {
 
-    @Async // Forces this method to run on a background thread pool
+    private final AuditLogRepository repository;
+
+    public AuditLogListener(AuditLogRepository repository) {
+        this.repository = repository;
+    }
+
+    @Async
     @EventListener
-    public void handleRateLimitExceeded(RateLimitExceededEvent event) {
-        // Here you would eventually inject a Repository to save to PostgreSQL
-        System.out.println("🚨 AUDIT LOG: Tenant " + event.getTenantId() + " blocked.");
+    public void handleRateLimitEvent(RateLimitEvent event) {
+        AuditLogRecord record = new AuditLogRecord(
+                event.getTenantId(),
+                event.getEndpoint(),
+                event.isAllowed(),
+                event.getTimestamp()
+        );
+        repository.save(record);
     }
 }

@@ -1,6 +1,6 @@
 package com.ratelimiter.filter;
 
-import com.ratelimiter.event.RateLimitExceededEvent;
+import com.ratelimiter.event.RateLimitEvent;
 import com.ratelimiter.service.TenantRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,32 +27,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Primary Extraction
         String tenantId = request.getHeader("X-API-KEY");
 
-        // 2. Secondary Extraction: Proxy Chain Traversal
         if (tenantId == null || tenantId.isEmpty()) {
             tenantId = extractRealIp(request);
         }
 
-        // 3. Hot Path
+        String endpoint = request.getRequestURI();
+
         if (tenantRegistry.allowRequest(tenantId)) {
+            eventPublisher.publishEvent(new RateLimitEvent(tenantId, endpoint, true));
             filterChain.doFilter(request, response);
         } else {
-            // 4. Fire Async Event using the exact identifier that was blocked
-            eventPublisher.publishEvent(new RateLimitExceededEvent(tenantId, extractRealIp(request)));
-
+            eventPublisher.publishEvent(new RateLimitEvent(tenantId, endpoint, false));
             response.setStatus(429);
             response.setContentType("application/json");
             response.getWriter().write("{\"error\": \"Too Many Requests\", \"message\": \"API rate limit exceeded.\"}");
         }
     }
 
-    // UTILITY: Safely extract IP through load balancers
     private String extractRealIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            // The first IP in the comma-separated list is the original client
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
