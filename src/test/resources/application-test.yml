@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:ratelimiter_testdb;DB_CLOSE_DELAY=-1
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+
+# This guarantees the GatewaySecurityTest knows exactly when to block requests
+rate-limit:
+  capacity: 5
+  refill-tokens: 5
+  refill-period-seconds: 1
