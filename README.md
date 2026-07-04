@@ -140,7 +140,7 @@ The project includes automated testing across multiple layers.
 ## Clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/distributed-rate-limiter.git
+https://github.com/hrithik-balakrishnan/rate-limiter.git
 ```
 
 ## Run
