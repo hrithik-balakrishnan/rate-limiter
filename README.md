@@ -1,50 +1,188 @@
 # High-Throughput Distributed Rate Limiter
 
-A production-grade distributed rate limiter built from scratch — benchmarked across three concurrency implementations, with multi-tenant isolation and a chaos-tested core engine.
+A distributed rate limiter built from scratch using **Java 21** and **Spring Boot 3** to explore high-performance concurrency, multi-tenant isolation, asynchronous processing, and scalable backend system design.
+
+The project is being developed incrementally across multiple phases, with each phase introducing production-inspired backend engineering concepts.
 
 ---
 
-## 🏗 Architecture
-- **Phase 1 (Complete):** Local In-Memory Core Engine.
-- **Phase 2 (In Progress):** Async HTTP Gateway + Audit Pipeline.
-- **Phase 3 (Upcoming):** Redis Cluster + Lua Scripts + Circuit Breaker.
+# 📌 Project Status
 
-## 🚀 Phase 1 Performance Results
-We pushed the JVM to its limits to ensure correctness under load.
+| Phase | Status |
+|--------|--------|
+| ✅ Phase 1 – Local Concurrency Engine | Complete |
+| ✅ Phase 2 – HTTP Gateway & Observability | Complete |
+| 🚧 Phase 3 – Redis + Distributed Rate Limiting | In Progress |
+
+---
+
+# ✨ Features
+
+## Phase 1
+- Token Bucket Rate Limiter
+- Lock-Free CAS Engine (`AtomicLong`)
+- Multi-Tenant Rate Limiting
+- `ConcurrentHashMap` Tenant Registry
+- High-Concurrency Benchmarking
+- Chaos Testing
+
+## Phase 2
+- Spring Boot REST API
+- Request Filtering & API Key Validation
+- Asynchronous Audit Logging (`@Async`)
+- PostgreSQL Persistence
+- Hibernate JDBC Batch Inserts
+- Paginated Audit APIs
+- Layered Spring Boot Testing
+- H2 Integration Testing
+
+---
+
+# 🏛 System Architecture
+
+```text
+                        Client
+                           │
+                           ▼
+                  HTTP Request (API Key)
+                           │
+                           ▼
+                 Spring Boot REST API
+                           │
+                           ▼
+                 Gateway Security Layer
+                           │
+                           ▼
+                Tenant Registry Service
+             (ConcurrentHashMap Registry)
+                           │
+                           ▼
+                Lock-Free Token Bucket
+                  (CAS Rate Limiter)
+                 /                    \
+                /                      \
+       Request Allowed          Request Rejected
+                │                      │
+                └──────────┬───────────┘
+                           ▼
+                 Async Audit Publisher
+                      (@Async Event)
+                           │
+                           ▼
+                ThreadPoolTaskExecutor
+                           │
+                           ▼
+                 Spring Data JPA Layer
+                           │
+                           ▼
+                    PostgreSQL Database
+```
+
+---
+
+# 📊 Performance Benchmarks
 
 | Implementation | Threads | Throughput |
-| :--- | :--- | :--- |
-| `synchronized` (Intrinsic Locks) | 10,000 | 1.6M RPS (Unstable/Caches) |
-| Lock-Free (CAS Engine) | 5,000 | 414,250 RPS (Stable) |
-| **Asymmetric Chaos Test** | **10,000** | **4,108 RPS** |
+|----------------|---------:|-----------:|
+| Token Bucket (`synchronized`) | 100 | 140,845 RPS |
+| Lock-Free CAS Engine | 5,000 | **414,250 RPS** |
 
-### Chaos Test: Asymmetric Saturation
-Simulated a "noisy neighbor" scenario: one tenant generated 80% of total traffic, causing deliberate cache-line contention. The architecture successfully isolated the abuser, keeping normal traffic flows completely unaffected.
-
-![Asymmetric Chaos Test](./docs/chaos-test.png)
+The lock-free implementation replaces intrinsic locks with optimistic atomic updates using `AtomicLong.compareAndSet()`, significantly improving scalability under concurrent workloads.
 
 ---
 
-## 🛠 Tech Stack
-- **Language:** Java 21
-- **Framework:** Spring Boot
-- **Concurrency:** `AtomicLong`, `ConcurrentHashMap`
-- **Testing:** JUnit 5, Maven
+# 🔥 Chaos Testing (Noisy Neighbor Simulation)
 
-## 📈 Phase 2 Roadmap
-- [ ] HTTP Filter layer (intercepting requests at the Spring Filter chain).
-- [ ] Async Audit Pipeline (`ThreadPoolTaskExecutor` decoupled from hot path).
-- [ ] PostgreSQL Event Logging for observability.
+A real-world multi-tenant workload was simulated where one tenant generated approximately **80% of all incoming traffic**.
 
-## 💡 Interview Reference
-| Question | Answer |
-| :--- | :--- |
-| Why CAS over `synchronized`? | Avoids OS-level thread context switching; nanosecond latency. |
-| Why did `synchronized` show 1.6M RPS? | Primitive field caching; JVM optimized away memory reads. |
-| How does multi-tenancy work? | Isolated `TokenBucket` instances mapped via `ConcurrentHashMap`. |
+| Metric | Value |
+|--------|------:|
+| Abuser Requests | 8,026 |
+| Normal Requests | 1,974 |
+| Throughput | **4,108 RPS** |
+
+The objective was not maximum throughput but validating **tenant isolation under contention**. Despite sustained abuse from one tenant, normal tenants continued to receive fair service.
+
+![Chaos Test](docs/chaos-test.png)
 
 ---
 
-## Author
+# ⚙️ Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Language | Java 21 |
+| Framework | Spring Boot 3 |
+| Database | PostgreSQL |
+| Testing Database | H2 |
+| Persistence | Spring Data JPA, Hibernate |
+| Concurrency | AtomicLong, ConcurrentHashMap |
+| Async Processing | `@Async`, ThreadPoolTaskExecutor |
+| Testing | JUnit 5, Mockito, Spring Boot Test |
+| Build Tool | Maven |
+
+---
+
+# 🧪 Test Strategy
+
+The project includes automated testing across multiple layers.
+
+- Unit Tests
+- Web Layer Tests (`@WebMvcTest`)
+- Repository Tests (`@DataJpaTest`)
+- Integration Tests (`@SpringBootTest`)
+- H2 In-Memory Database Testing
+
+---
+
+# 🚀 Getting Started
+
+## Clone
+
+```bash
+git clone https://github.com/YOUR_USERNAME/distributed-rate-limiter.git
+```
+
+## Run
+
+```bash
+mvn spring-boot:run
+```
+
+## Execute Tests
+
+```bash
+mvn test
+```
+
+---
+
+# 📅 Roadmap
+
+### ✅ Phase 1
+- Token Bucket
+- Lock-Free CAS
+- Multi-Tenant Registry
+- Chaos Testing
+
+### ✅ Phase 2
+- HTTP Gateway
+- Async Audit Pipeline
+- PostgreSQL Persistence
+- Pagination APIs
+
+### 🚧 Phase 3
+- Redis Cluster
+- Lua Scripts
+- Distributed Rate Limiting
+- Cross-Node Consistency
+- Horizontal Scaling
+
+---
+
+# 👨‍💻 Author
+
 **Hrithik B**
-[LinkedIn](https://www.linkedin.com/in/hrithik-b-a45865319)
+
+- GitHub: https://github.com/hrithik-balakrishnan
+- LinkedIn: https://www.linkedin.com/in/hrithik-b-a45865319
