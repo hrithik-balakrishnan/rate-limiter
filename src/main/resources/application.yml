@@ -1,10 +1,26 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:ratelimiter_testdb;DB_CLOSE_DELAY=-1
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
+    url: jdbc:postgresql://localhost:5432/ratelimiter
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres123
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: create-drop # Automatically creates and destroys the schema for the test
+      ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+    show-sql: true
+    open-in-view: false
+
+rate-limit:
+  capacity: 5
+  refill-tokens: 5
+  refill-period-seconds: 1
